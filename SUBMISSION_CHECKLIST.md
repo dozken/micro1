@@ -6,32 +6,23 @@ Everything in the repo is finished and merged to `main`. The remaining items
 below need a human (account access / screen recording) and cannot be done by
 the agent.
 
-## 1. Record the solution video (≤ 5 minutes) — required deliverable
+## 1. Solution video — done
 
-Suggested flow, timed to fit:
-
-| Time | Segment | What to show |
-|---|---|---|
-| 0:00–0:30 | Problem | Who has it (teams merging AI-authored PRs), the bottleneck (silent regressions that pass existing tests). One sentence on the baseline: same model, diff only, no tools. |
-| 0:30–2:30 | One realistic execution | Either run live: `python3 eval/run_eval.py --killed-per-module 1 --survived-per-module 1 --workers 4` (~90s), or walk through `results/RESULTS.md` if recording time is tight. |
-| 2:30–4:00 | The challenging case | Open `docs/trajectories/equivalent_mutant_baseline.md` vs `..._agent.md` side by side: baseline confidently wrong (0.97 "bug" from an unreachable hypothetical), agent traces the invariant and clears it. |
-| 4:00–5:00 | Comparison + changelog | Results table (86.4%/100% recall vs 68.2%/75%). Changelog highlights: the change that contributed most (tools + verification instruction, Iteration 1) and the removed experiment (Iteration 0, the lost multi-agent corpus run). |
+Recorded, narrated (Kokoro TTS, local re-synth of the original narration),
+uploaded to YouTube unlisted: https://youtu.be/UVs6c3nyBLw. Linked from
+`README.md`.
 
 ## 2. Submit the HackerEarth form
 
 - Repo link: `https://github.com/dozken/micro1` (default branch `main` has everything).
-- Attach/link the video from step 1.
+- Video URL: https://youtu.be/UVs6c3nyBLw
 - The write-up fields can be filled from `README.md` — the sections map 1:1
   to the judging rubric (problem & user value, agent solution & engineering,
   measured improvement, reproducibility, hot take).
 
-## 3. Make the repo accessible to judges — worth 15 points
+## 3. Make the repo accessible to judges — worth 15 points — done
 
-The repo is currently **private**. Ground rule #10 requires judges be able
-to run the project. Either:
-
-- make the repo public (Settings → General → Danger Zone → Change visibility), or
-- grant access however the HackerEarth submission instructions specify.
+Repo is public: https://github.com/dozken/micro1
 
 ## Optional, if time allows
 

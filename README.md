@@ -226,10 +226,7 @@ on the same case:
 
 ## Solution video
 
-Not recorded as part of this submission — everything needed to reproduce
-the walkthrough it would show (the baseline vs. agent run on the same
-case, the final comparison table, the changelog) is runnable directly via
-the reproduction guide above and the three trajectories linked above.
+[https://youtu.be/UVs6c3nyBLw](https://youtu.be/UVs6c3nyBLw) (unlisted, ~3 min) — problem framing, the baseline vs. agent run, the boundary-check case, and the results/changelog. Everything it shows is also runnable directly via the reproduction guide above and the three trajectories linked above.
 
 ## Ground rules checklist
 
