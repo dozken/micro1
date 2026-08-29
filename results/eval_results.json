@@ -1,0 +1,673 @@
+{
+  "summary": {
+    "baseline": {
+      "n": 22,
+      "tp": 9,
+      "fp": 4,
+      "fn": 3,
+      "tn": 6,
+      "accuracy": 0.682,
+      "precision": 0.692,
+      "recall": 0.75,
+      "f1": 0.72,
+      "total_cost_usd": 0.5925,
+      "avg_duration_ms": 10096,
+      "errors": 0
+    },
+    "agent": {
+      "n": 22,
+      "tp": 12,
+      "fp": 3,
+      "fn": 0,
+      "tn": 7,
+      "accuracy": 0.864,
+      "precision": 0.8,
+      "recall": 1.0,
+      "f1": 0.889,
+      "total_cost_usd": 1.6983,
+      "avg_duration_ms": 22641,
+      "errors": 0
+    },
+    "wall_clock_seconds": 234.4
+  },
+  "cases": [
+    {
+      "module": "interval_merge",
+      "mutation_index": 0,
+      "mutation_kind": "condition_negation",
+      "description": "condition_negation:negate_test @ line 13",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "Line: `if intervals:\\n        return []` \u2014 for any non-empty input (e.g. [(1,3),(3,5)]) this now returns [] instead of merging; for the empty-list case `[]` (falsy), it skips the early return and executes `ordered = sorted(intervals, key=...)` then `merged = [ordered[0]]`, which raises IndexError on an empty sequence.",
+        "reasoning": "The original guard `if not intervals: return []` correctly short-circuits only on empty input. Negating it to `if intervals:` inverts the condition: it now returns [] precisely when it shouldn't (non-empty input, discarding all merge logic) and falls through to code that crashes precisely when it previously handled gracefully (empty input, IndexError from ordered[0]). This breaks the function for essentially all inputs.</reasoning>\n",
+        "cost_usd": 0.022783599999999998,
+        "duration_ms": 8833,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "pytest output: `test_merge_empty` fails with `IndexError: list index out of range` at `merged = [ordered[0]]`, and every other test (e.g. `test_merge_overlap`) fails with `assert [] == [(1, 6), (8, 10)]`. 10 failed in 0.06s.",
+        "reasoning": "The change flips `if not intervals:` to `if intervals:`, inverting the guard. Now: (1) empty input `[]` is falsy, so the guard is skipped and execution falls through to `ordered[0]` on an empty list, raising IndexError instead of returning `[]`; (2) any non-empty input is truthy, so the function immediately returns `[]` instead of merging, silently discarding all data. This isn't a case of insufficient test coverage \u2014 the existing test suite directly exercises exactly this code path and every single test fails, confirming the bug empirically rather than just from reading the diff.",
+        "cost_usd": 0.0530398,
+        "duration_ms": 10639,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "interval_merge",
+      "mutation_index": 1,
+      "mutation_kind": "condition_negation",
+      "description": "condition_negation:negate_test @ line 19",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.99,
+        "evidence": "Line: `if not start <= last_end + 1:` guards the merge branch `merged[-1] = (last_start, max(last_end, end))`. For input [(1,3),(2,5)]: last_end=3, start=2, `start <= last_end+1` is `2<=4`=True, so `not True`=False, falls to else and appends (2,5) instead of merging \u2014 result [(1,3),(2,5)] instead of correct [(1,5)]. Also for disjoint [(1,2),(10,20)]: `10<=3` is False, `not False`=True, incorrectly merges into (1,20).",
+        "reasoning": "The condition that decides whether to merge vs. start a new interval was negated with `not`, flipping the branch logic so overlapping/adjacent intervals are left separate and disjoint intervals get merged \u2014 the opposite of correct interval-merge behavior.",
+        "cost_usd": 0.024137600000000002,
+        "duration_ms": 9334,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "`python3 -m pytest -q test_interval_merge.py` \u2192 \"9 failed, 1 passed\". E.g. test_merge_no_overlap: `merge_intervals([(1, 2), (4, 5)])` returns `[(1, 5)]` instead of `[(1, 2), (4, 5)]`; test_merge_touching: `merge_intervals([(1, 3), (3, 5)])` returns `[(1, 3), (3, 5)]` instead of `[(1, 5)]`.",
+        "reasoning": "The diff flips `if start <= last_end + 1` to `if not start <= last_end + 1`. The original condition correctly merges when the next interval starts at or before last_end+1 (overlapping or touching). Negating it means the code now merges exactly when the next interval is disjoint (a gap), and instead appends as a separate interval when it truly overlaps/touches. This inverts the whole algorithm's behavior \u2014 confirmed directly by the interactive read of the module (line 16) and by running the existing test suite, which fails on 9 of 10 cases covering the core merge logic and all downstream functions (total_covered, contains_point, gaps, insert_interval) that depend on merge_intervals. This is not an edge case the tests miss \u2014 it's a wholesale inversion caught immediately by basic coverage.",
+        "cost_usd": 0.0516204,
+        "duration_ms": 10085,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "interval_merge",
+      "mutation_index": 2,
+      "mutation_kind": "condition_negation",
+      "description": "condition_negation:negate_test @ line 34",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.99,
+        "evidence": "Line changed from `if start <= point <= end:` to `if not start <= point <= end:`. With intervals=[(1,5)] and point=3 (inside the interval), the new condition evaluates `not (1<=3<=5)` = `not True` = `False`, so the loop doesn't return True for the matching interval, and after the loop `contains_point` returns False \u2014 even though 3 is clearly within [1,5]. Conversely, for point=10 (outside all intervals), `not (1<=10<=5)` = `not False` = `True`, causing the function to incorrectly return True.",
+        "reasoning": "The added `not` inverts the membership test inside the loop. This flips the function's semantics: it now returns True as soon as it finds an interval that does NOT contain the point (rather than one that does), and returns False (after exhausting the loop) only when every interval actually contains the point \u2014 which for non-overlapping merged intervals happens essentially only when there's a single interval and the point is inside it, or never if there are \u22652 intervals and the point can't be inside all of them simultaneously. This is a straightforward logic inversion bug, not a stylistic or equivalent change.</reasoning>\n",
+        "cost_usd": 0.0233256,
+        "duration_ms": 6858,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "pytest output: \"FAILED test_interval_merge.py::test_contains_point - assert not True ... E where True = contains_point([(1, 3), (10, 12)], 4)\" (1 failed, 9 passed)",
+        "reasoning": "The diff changed `if start <= point <= end: return True` to `if not start <= point <= end: return True`, inverting the membership test inside the loop over merged intervals. For a point that lies inside one interval but not another (e.g. point=4 with merged intervals [(1,3),(10,12)]), the function now incorrectly returns True as soon as it hits an interval that does NOT contain the point, instead of returning True only when one does. This is directly demonstrated by the failing existing test `test_contains_point`, so the bug is both reasoned out and empirically confirmed \u2014 no need to rely on uncovered edge cases.",
+        "cost_usd": 0.0439274,
+        "duration_ms": 10282,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "interval_merge",
+      "mutation_index": 6,
+      "mutation_kind": "comparison_operator_swap",
+      "description": "comparison_operator_swap:Gt->GtE @ line 45",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.95,
+        "evidence": "Line: `if next_start - end >= 1:` \u2014 for merged intervals like [(1,5),(6,10)], end=5, next_start=6, so next_start-end == 1. This now satisfies the condition and appends (end+1, next_start-1) = (6, 5), an invalid interval where start > end, even though there is no actual gap between 5 and 6 (they are adjacent integers).",
+        "reasoning": "The function computes gaps between consecutive merged intervals. A real gap exists only when next_start - end > 1 (i.e., there's at least one integer strictly between end and next_start). When next_start - end == 1, the intervals are contiguous with no missing integers, so no gap should be reported. Changing `>` to `>=` makes the condition true in this adjacent case too, producing a spurious/invalid gap tuple (end+1, next_start-1) where the first element exceeds the second. This is a clear off-by-one regression that changes output for a common case (adjacent merged intervals) and can additionally introduce malformed (start>end) tuples that downstream code may not expect.",
+        "cost_usd": 0.0191394,
+        "duration_ms": 12338,
+        "error": null
+      },
+      "agent": {
+        "verdict": "no_bug",
+        "confidence": 0.93,
+        "evidence": "pytest output: \"..........                                                               [100%]\\n10 passed in 0.02s\". Analytically: in merge_intervals (interval_merge.py:6-20), a new entry is appended (not merged) only when `start > last_end + 1`, i.e. `start - last_end >= 2` (integers), and once appended, the prior entry's `end` is never mutated again. So every consecutive pair in the final merged list satisfies `next_start - end >= 2`. gaps() (lines 33-41) always builds its pairs from merge_intervals()'s own output, so a value of exactly 1 (or 0/negative) for `next_start - end` at line 39 is structurally unreachable \u2014 e.g. end=3,next_start=4 (diff=1) would already have been merged since `4 <= 3+1`.",
+        "reasoning": "Given the invariant that next_start - end is always >= 2 whenever the gaps() loop body executes, the conditions `> 1` and `>= 1` are logically equivalent on every reachable input \u2014 both are True exactly when the value is >= 2, and neither can ever see the boundary value of 1. Therefore the diff is a no-op change: it neither introduces a bug nor fixes one, and the passing test suite is consistent with (though not sufficient alone to prove) this behavioral equivalence.",
+        "cost_usd": 0.13845059999999998,
+        "duration_ms": 54951,
+        "num_turns": 8,
+        "error": null
+      },
+      "baseline_correct": false,
+      "agent_correct": true
+    },
+    {
+      "module": "interval_merge",
+      "mutation_index": 12,
+      "mutation_kind": "constant_off_by_one",
+      "description": "constant_off_by_one:minus_one @ line 17",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "no_bug",
+        "confidence": 0.9,
+        "evidence": "`merged = [ordered[0]]` followed by `for start, end in ordered[0:]:` means the loop's first iteration re-processes `ordered[0]` against `merged[-1]`, which at that point IS `ordered[0]` itself (start=last_start, end=last_end). The condition `start <= last_end + 1` evaluates to `last_start <= last_end + 1`, which is true for any well-formed interval (last_start <= last_end), and the update `merged[-1] = (last_start, max(last_end, end))` computes `(last_start, max(last_end, last_end)) = (last_start, last_end)` \u2014 i.e. it rewrites merged[-1] to the exact same tuple it already was.",
+        "reasoning": "Changing `ordered[1:]` to `ordered[0:]` causes the first interval to be merged against itself once before the loop proceeds to `ordered[1], ordered[2], ...` exactly as before. Since merging an interval with itself is idempotent (a no-op tuple reassignment), the rest of the loop's behavior over the remaining elements is unchanged. The only cost is one wasted, harmless iteration \u2014 not a behavioral difference in the output for any input list of well-formed (start <= end) intervals.</reasoning>\n</invoke>\n",
+        "cost_usd": 0.0317946,
+        "duration_ms": 14753,
+        "error": null
+      },
+      "agent": {
+        "verdict": "no_bug",
+        "confidence": 0.85,
+        "evidence": "Test run: `python3 -m pytest -q test_interval_merge.py` \u2192 `..........  [100%] 10 passed in 0.03s`. Manual trace: after `merged = [ordered[0]]`, the new extra first iteration reads `start0,end0 = ordered[0]` and `last_start,last_end = merged[-1]`, which are identical values `(start0,end0)`. Since well-formed intervals satisfy `start0 <= end0`, the check `start0 <= last_end+1` (i.e. `start0 <= end0+1`) is always true, so it sets `merged[-1] = (start0, max(end0,end0)) = (start0,end0)` \u2014 an exact no-op \u2014 before the loop continues through `ordered[1], ordered[2], ...` exactly as before.",
+        "reasoning": "Changing `ordered[1:]` to `ordered[0:]` makes the loop reprocess the first element that's already seeded into `merged`, which looks like a classic off-by-one duplication bug. But tracing the reprocessing step shows it recomputes the exact same tuple already in `merged[-1]` (idempotent merge-with-self), because `start <= end` holds for every interval in this module's documented contract (docstring says intervals are `[start, end]` inclusive, and other functions like `total_covered` rely on `end >= start`). So for all valid inputs, output is unchanged versus the original `ordered[1:]` version \u2014 confirmed against every case in the existing test suite (overlap, touching, nested, unsorted, empty). The only way this manifests as a real duplication bug is a malformed interval with `start > end`, which is outside the module's contract and untested/unused elsewhere, so I don't count it as a behavioral bug introduced by this change under normal/intended usage \u2014 hence moderately-high but not maximal confidence.",
+        "cost_usd": 0.1624972,
+        "duration_ms": 68130,
+        "num_turns": 8,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "interval_merge",
+      "mutation_index": 15,
+      "mutation_kind": "arithmetic_operator_swap",
+      "description": "arithmetic_operator_swap:Sub->Add @ line 45",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.98,
+        "evidence": "Line changed from `if next_start - end > 1:` to `if next_start + end > 1:`. Consider merged intervals `[(1, 2), (3, 10)]` (two touching, non-overlapping intervals with no gap between them, since 2 and 3 are consecutive integers). Original code: `next_start - end = 3 - 2 = 1`, not `> 1`, so no gap is reported \u2014 correct. New code: `next_start + end = 3 + 2 = 5`, which is `> 1`, so it wrongly appends `(end+1, next_start-1) = (3, 2)` \u2014 an invalid interval (start > end) representing a gap that doesn't exist.",
+        "reasoning": "The function's purpose is to find gaps between consecutive merged intervals, which requires computing the distance between `next_start` and `end` (a subtraction). Replacing subtraction with addition changes the semantics entirely: instead of measuring the gap size, it now checks an unrelated sum condition. For any pair of positive-ish adjacent/touching intervals, the sum is almost always `> 1` even when there is no actual gap (difference of 1 or less), causing false-positive gap detection and production of invalid/nonsensical ranges. This is a clear behavioral regression, not a refactor-neutral change.",
+        "cost_usd": 0.031231600000000005,
+        "duration_ms": 15217,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 0.97,
+        "evidence": "Test suite result: `python3 -m pytest -q test_interval_merge.py` \u2192 \"..........  [100%] 10 passed in 0.02s\" \u2014 all pass, but `test_gaps` only exercises positive-valued intervals: `gaps([(1, 3), (6, 8), (10, 10)]) == [(4, 5), (9, 9)]`.\n\nManual trace of the changed line (`gaps`, interval_merge.py:39) on an input the suite never tries, `gaps([(-10, -8), (-2, 0)])`:\n- `merge_intervals` produces `[(-10, -8), (-2, 0)]` unchanged (since -2 <= -8+1=-7 is False, they don't merge).\n- For the pair, `end=-8`, `next_start=-2`.\n- Original condition `next_start - end > 1` \u2192 `-2 - (-8) = 6 > 1` \u2192 True \u2192 gap `(-7, -3)` is (correctly) appended.\n- Mutated condition `next_start + end > 1` \u2192 `-2 + (-8) = -10 > 1` \u2192 False \u2192 no gap appended.\n- Correct output should be `[(-7, -3)]` (a real gap of 5 integers between the two intervals); the mutated code returns `[]`.",
+        "reasoning": "The diff changes the gap-detection test in `gaps()` from `next_start - end > 1` (the correct \"is there space between these merged intervals\" check, based on the *difference* between consecutive interval boundaries) to `next_start + end > 1` (a nonsensical check based on their *sum*). Because `merge_intervals` guarantees `next_start > end + 1` for any two intervals that remain separate after merging, the original condition is actually always true post-merge (i.e., a gap is always emitted between consecutive merged intervals) \u2014 so replacing it with a sum-based check doesn't just introduce redundancy, it introduces a genuine behavioral divergence whenever interval endpoints are negative or otherwise make `next_start + end <= 1` even though a real gap exists (e.g. both intervals in negative territory, or one interval crossing zero with a very negative end). The existing test suite's only `gaps()` test uses small positive integers, where `end` and `next_start` are both positive and the sum check happens to still exceed 1, masking the bug. This is a case where the tests pass but do not cover the changed code path meaningfully, and the change is a clear logic error, not a refactor or equivalent condition.",
+        "cost_usd": 0.1117496,
+        "duration_ms": 44105,
+        "num_turns": 7,
+        "error": null
+      },
+      "baseline_correct": false,
+      "agent_correct": false
+    },
+    {
+      "module": "lru_ttl_cache",
+      "mutation_index": 0,
+      "mutation_kind": "condition_negation",
+      "description": "condition_negation:negate_test @ line 14",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.99,
+        "evidence": "Diff line: `-        if capacity < 0:` changed to `+        if not capacity < 0:`. `not capacity < 0` simplifies to `capacity >= 0`, so the guard now raises for all valid non-negative capacities and admits negative ones.",
+        "reasoning": "The original code raised ValueError when capacity < 0 (rejecting negative capacities, allowing capacity >= 0). The diff changes the condition to `if not capacity < 0`, which is logically equivalent to `if capacity >= 0`. This inverts the validation: now any non-negative capacity (0, 1, 100, etc.) raises ValueError('capacity must be >= 0') \u2014 an error message that is now self-contradictory since it fires precisely when capacity IS >= 0. Meanwhile negative capacities (e.g. capacity=-5) pass through without raising, silently constructing a cache with a negative capacity, which will misbehave in any downstream LRU eviction logic (e.g. `while len(self) > self.capacity: evict()` would evict everything, or comparisons/allocations relying on non-negative capacity would break).\n\nConcrete failing input: LRUTTLCache(capacity=10) \u2014 a perfectly valid call \u2014 now raises ValueError('capacity must be >= 0'), whereas LRUTTLCache(capacity=-1) now succeeds instead of raising.",
+        "cost_usd": 0.0232456,
+        "duration_ms": 6446,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "pytest output: 10 failed. E.g. `LRUTTLCache(capacity=2)` now raises `ValueError: capacity must be >= 0` at lru_ttl_cache.py:13 for every legitimate positive/zero capacity, and `test_negative_capacity_rejected` fails with \"Failed: DID NOT RAISE ValueError\" when constructing `LRUTTLCache(capacity=-1)`.",
+        "reasoning": "The diff changed `if capacity < 0:` to `if not capacity < 0:`, which is logically equivalent to `if capacity >= 0:`. This exactly inverts the guard: valid non-negative capacities (0, 1, 2, ...) now trigger the \"must be >= 0\" error, while actually-invalid negative capacities (e.g. -1) pass through silently and get stored as `self.capacity = -1`, which would later interact badly with `len(self._store) >= self.capacity` in `put()` (always true, so it evicts before ever growing, and with capacity 0 handled specially it's less relevant, but for negative capacities eviction logic is nonsensical). This isn't a case of tests failing to cover new behavior \u2014 the test suite directly and correctly demonstrates the inversion breaks the fundamental, most common use of the class (constructing a cache with a normal positive capacity). This is about as clear-cut and severe a bug as this diff could produce.",
+        "cost_usd": 0.0605872,
+        "duration_ms": 12213,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "lru_ttl_cache",
+      "mutation_index": 1,
+      "mutation_kind": "condition_negation",
+      "description": "condition_negation:negate_test @ line 24",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.99,
+        "evidence": "Line changed from `if self.capacity == 0:` to `if not self.capacity == 0:` in put(). `not self.capacity == 0` is equivalent to `self.capacity != 0`, the logical negation of the original condition.",
+        "reasoning": "The guard now triggers early-return (no insertion) whenever capacity is nonzero, and only allows insertion when capacity is exactly 0. Any normal cache (e.g. capacity=10) calling put() will silently no-op forever \u2014 nothing is ever cached. Meanwhile a capacity=0 cache (which should store nothing) will now insert entries. This is a straightforward condition inversion, not an equivalent refactor.</reasoning>\n</invoke>\n",
+        "cost_usd": 0.0239486,
+        "duration_ms": 8944,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "pytest output: \"8 failed, 2 passed in 0.07s\". E.g. test_basic_put_get fails with `AssertionError: assert None == 1` after `cache.put(\"a\", 1); cache.get(\"a\")`, and test_capacity_zero_stores_nothing raises `KeyError: 'dictionary is empty'` from `self._store.popitem(last=False)` inside put().",
+        "reasoning": "The original guard `if self.capacity == 0: return` short-circuits puts only when capacity is 0 (a no-op cache). The mutation changed it to `if not self.capacity == 0: return`, which is logically inverted: now put() returns early for every capacity except exactly 0, meaning a normal cache (capacity=2, etc.) silently drops every put, and a capacity=0 cache \u2014 which should always no-op \u2014 now falls through into the eviction logic, calling `popitem` on an empty OrderedDict and raising KeyError. This is a straightforward boolean-logic inversion bug, confirmed directly by the test suite: 8 of 10 tests fail, covering basic put/get, LRU eviction order, recency refresh on get, overwrite semantics, TTL expiry, and purge_expired \u2014 i.e. essentially all cache functionality. The only two passing tests must be ones that don't call put() with a nonzero capacity in a way that requires stored data. This isn't a \"tests don't cover it\" situation \u2014 the tests directly exercise the changed line and fail, providing complete confirmation with no need for further edge-case reasoning.",
+        "cost_usd": 0.054143800000000006,
+        "duration_ms": 10719,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "lru_ttl_cache",
+      "mutation_index": 2,
+      "mutation_kind": "condition_negation",
+      "description": "condition_negation:negate_test @ line 27",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.98,
+        "evidence": "Line: `if not key in self._store:` followed by `del self._store[key]`. Concrete failure: for a fresh cache, calling `cache.put(\"a\", 1)` (capacity > 0) hits capacity==0 check (false), then evaluates `not \"a\" in self._store` \u2192 True (store is empty) \u2192 executes `del self._store[\"a\"]` \u2192 raises `KeyError: 'a'` since \"a\" was never in the store. Any put() call for a key not already cached now crashes.",
+        "reasoning": "The diff inverts the condition from `if key in self._store` to `if not key in self._store`, but leaves the branch body (`del self._store[key]`) unchanged. Originally, when the key already existed, it was deleted so it could be reinserted (refreshing its LRU position). Now the branch fires when the key does NOT exist, and attempts `del self._store[key]` on a key that is absent, which raises KeyError immediately. The `elif` (capacity eviction) now incorrectly triggers only when the key already exists in the store, which is the wrong condition for eviction (eviction should happen when inserting a new key at capacity, not when updating an existing one).",
+        "cost_usd": 0.0203148,
+        "duration_ms": 13675,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "pytest output: \"F.FFFFFFF.  [100%] ... FAILED test_lru_ttl_cache.py::test_basic_put_get - KeyError: 'a' ... 8 failed, 2 passed in 0.06s\". The failure trace shows cache.put(\"a\", 1) on a brand-new empty cache raises KeyError: 'a' at line 26 (`del self._store[key]`).",
+        "reasoning": "The diff changed `if key in self._store:` to `if not key in self._store:`, inverting the condition. Originally, an existing key was deleted before re-inserting (to refresh its position), and eviction via popitem only happened in the elif branch when the store was full and the key was new. After the change, the `if` branch fires precisely when the key is ABSENT from the store, so `del self._store[key]` immediately raises KeyError on any first insert of a new key \u2014 as confirmed by 8 of 10 tests failing with exactly that error, including the most basic put/get test. This is not a subtle untested edge case; it breaks the fundamental happy path.",
+        "cost_usd": 0.0769994,
+        "duration_ms": 17251,
+        "num_turns": 5,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "lru_ttl_cache",
+      "mutation_index": 10,
+      "mutation_kind": "comparison_operand_swap",
+      "description": "comparison_operand_swap:swap_operands @ line 24",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "no_bug",
+        "confidence": 0.98,
+        "evidence": "`if 0 == self.capacity:` is logically identical to `if self.capacity == 0:` \u2014 equality is commutative for numeric types in Python, so every input that previously returned early (capacity == 0) still does, and every other input behaves the same.",
+        "reasoning": "The change only reverses the operands of the equality comparison (`self.capacity == 0` \u2192 `0 == self.capacity`). Python's `==` is symmetric for these types (int comparison), so this is purely stylistic (Yoda condition) with no semantic difference. No other logic changed.",
+        "cost_usd": 0.0194066,
+        "duration_ms": 3320,
+        "error": null
+      },
+      "agent": {
+        "verdict": "no_bug",
+        "confidence": 0.98,
+        "evidence": "Full test run: \"..........                                                               [100%]\\n10 passed in 0.03s\". Diff changes `if self.capacity == 0:` to `if 0 == self.capacity:` in put() at lru_ttl_cache.py:22 \u2014 both operands are plain ints, `==` is symmetric and side-effect-free for int/int comparison.",
+        "reasoning": "Yoda-style rewrite of an equality check between an int attribute and int literal. Python's int `__eq__` is commutative and has no side effects, so `x == 0` and `0 == x` evaluate identically for every possible value of self.capacity, including 0, negative (already excluded by __init__'s ValueError), and any positive int. No input can distinguish the two forms, so there's no behavioral change to test coverage for \u2014 this isn't a case where passing tests merely fail to exercise the changed path.",
+        "cost_usd": 0.0448552,
+        "duration_ms": 10945,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "lru_ttl_cache",
+      "mutation_index": 14,
+      "mutation_kind": "comparison_operand_swap",
+      "description": "comparison_operand_swap:swap_operands @ line 44",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "no_bug",
+        "confidence": 0.98,
+        "evidence": "Original: `self.get(key, _MISSING) is not _MISSING`; changed to `_MISSING is not self.get(key, _MISSING)`.",
+        "reasoning": "`x is not y` and `y is not x` are semantically identical \u2014 identity comparison is commutative and neither operand has a side effect that ordering could affect. The call to `self.get(key, _MISSING)` still executes exactly once in the new version, so behavior is unchanged for every possible key/value.",
+        "cost_usd": 0.029750800000000004,
+        "duration_ms": 7136,
+        "error": null
+      },
+      "agent": {
+        "verdict": "no_bug",
+        "confidence": 0.98,
+        "evidence": "pytest output: \"python3 -m pytest -q test_lru_ttl_cache.py\\n..........                                                               [100%]\\n10 passed in 0.03s\". The diff changes `self.get(key, _MISSING) is not _MISSING` to `_MISSING is not self.get(key, _MISSING)` in `__contains__` (lru_ttl_cache.py:42).",
+        "reasoning": "`is`/`is not` test object identity, which is a symmetric relation: `a is b` holds iff `b is a`, for any objects a and b, with no exceptions. Swapping operand order therefore cannot change the boolean result for any key/value/expiry combination (present, absent, expired, or None-valued). `self.get(key, _MISSING)` is still called exactly once, so side effects inside `get` (lazy deletion of expired entries, `move_to_end` on a hit) are unchanged in number and order. This is a pure no-op reordering (e.g. a 'Yoda condition' style change) with no behavioral effect, confirmed by the full existing test suite passing unchanged.",
+        "cost_usd": 0.0732498,
+        "duration_ms": 21498,
+        "num_turns": 5,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "lru_ttl_cache",
+      "mutation_index": 17,
+      "mutation_kind": "comparison_operand_swap",
+      "description": "comparison_operand_swap:swap_operands @ line 21",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "no_bug",
+        "confidence": 0.99,
+        "evidence": "Line changed from `return expires_at is not None and self._clock() >= expires_at` to `return None is not expires_at and self._clock() >= expires_at`.",
+        "reasoning": "`is not` is a symmetric identity comparison: `a is not b` is equivalent to `not (a is b)`, and `is` compares object identity, which is symmetric (`a is b` iff `b is a`). Swapping the operand order of `expires_at is not None` to `None is not expires_at` produces the exact same boolean result for every possible value of `expires_at` (None, a float, etc.). No input can distinguish the two forms, so this is a purely cosmetic/stylistic edit with zero behavioral effect.",
+        "cost_usd": 0.0328824,
+        "duration_ms": 8781,
+        "error": null
+      },
+      "agent": {
+        "verdict": "no_bug",
+        "confidence": 0.99,
+        "evidence": "pytest output: \"..........                                                               [100%]\\n10 passed in 0.03s\". Also, `None is not expires_at` and `expires_at is not None` are the same boolean expression for every input, since Python's `is`/`is not` operators are symmetric (`a is b` always equals `b is a` \u2014 identity comparison doesn't depend on operand order).",
+        "reasoning": "The diff only reorders the operands of an `is not` identity check. Since object identity comparison is symmetric, `None is not expires_at` evaluates identically to `expires_at is not None` for every possible value of expires_at (None, a float in the past, a float in the future, etc.) \u2014 there is no input on which the two expressions diverge. This is purely a stylistic/readability regression (unusual \"Yoda condition\" phrasing), not a logic change. The full test suite passes, consistent with the change being behavior-preserving, and reasoning through the expired/not-expired/None cases confirms no edge case is affected.",
+        "cost_usd": 0.0443738,
+        "duration_ms": 10947,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "token_bucket",
+      "mutation_index": 0,
+      "mutation_kind": "condition_negation",
+      "description": "condition_negation:negate_test @ line 13",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.99,
+        "evidence": "Line changed from `if capacity <= 0:` to `if not capacity <= 0:`, which is logically equivalent to `if capacity > 0:`. So `TokenBucket(capacity=10, rate=1, ...)` (a valid, positive capacity) now raises `ValueError('capacity must be > 0')`, while `TokenBucket(capacity=-5, rate=1, ...)` (an invalid, non-positive capacity) now passes validation silently.",
+        "reasoning": "The validation condition was inverted by adding `not`. The intent (per the error message \"capacity must be > 0\") is to reject capacity <= 0, which the original code did correctly. The new condition rejects capacity > 0 instead, exactly backwards: it blocks all legitimate positive capacities and allows the invalid zero/negative ones through, breaking every normal use of the class.",
+        "cost_usd": 0.030381200000000004,
+        "duration_ms": 6794,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "pytest output: 11 failed, e.g. `test_starts_full` fails with `ValueError: capacity must be > 0` when constructing `TokenBucket(capacity=10, rate=1, clock=clock)` \u2014 a normal valid call. Also `test_invalid_capacity_rejected` fails with \"DID NOT RAISE ValueError\", confirming invalid capacities (e.g. 0 or negative) are now silently accepted.",
+        "reasoning": "The diff changed `if capacity <= 0: raise ValueError(...)` to `if not capacity <= 0: raise ValueError(...)`. `not capacity <= 0` is logically `capacity > 0`, so the guard now raises for every valid positive capacity and passes through every invalid (<=0) capacity \u2014 inverting the intended validation. This isn't a coverage gap; the existing test suite directly catches it (11/11 relevant tests fail), and reasoning through a concrete case confirms it: `TokenBucket(capacity=10, rate=1)` should succeed but now raises, while `TokenBucket(capacity=-5, rate=1)` should raise but now succeeds.",
+        "cost_usd": 0.0638962,
+        "duration_ms": 10987,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "token_bucket",
+      "mutation_index": 1,
+      "mutation_kind": "condition_negation",
+      "description": "condition_negation:negate_test @ line 15",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.99,
+        "evidence": "Changed `if rate < 0:` to `if not rate < 0:`. The new condition `not rate < 0` is equivalent to `rate >= 0`, so the constructor now raises ValueError('rate must be >= 0') whenever rate is non-negative, and only accepts negative rates.",
+        "reasoning": "Calling TokenBucket(capacity=10, rate=5, clock=...) \u2014 a perfectly valid, common construction \u2014 now raises ValueError because `not (5 < 0)` is True. Conversely TokenBucket(capacity=10, rate=-3, ...) would now succeed, silently allowing a negative refill rate, which is exactly what the original check was meant to prevent (and the error message text still says \"rate must be >= 0\", confirming the intent was inverted by mistake). This breaks all normal usage of the class.",
+        "cost_usd": 0.023048600000000002,
+        "duration_ms": 6925,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "Running `python3 -m pytest -q test_token_bucket.py` gives `10 failed, 1 passed`, e.g. `test_starts_full` fails with `ValueError: rate must be >= 0` at `token_bucket.py:14` when constructing `TokenBucket(capacity=10, rate=1, clock=clock)` \u2014 a perfectly valid non-negative rate.",
+        "reasoning": "The diff changed `if rate < 0:` to `if not rate < 0:`, which is logically `if rate >= 0:`. This flips the guard: any non-negative rate (the valid, intended case) now raises ValueError('rate must be >= 0'), while negative rates (the actually invalid case) are silently accepted. This isn't a subtle edge-case gap \u2014 it breaks the module for essentially all normal usage, as confirmed directly by the test run.</reasoning>\n",
+        "cost_usd": 0.0651544,
+        "duration_ms": 11343,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "token_bucket",
+      "mutation_index": 2,
+      "mutation_kind": "condition_negation",
+      "description": "condition_negation:negate_test @ line 26",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.99,
+        "evidence": "Line: `if not elapsed > 0:` (was `if elapsed > 0:`). This guards the block `self._tokens = min(self.capacity, self._tokens + elapsed * self.rate); self._last_refill = now`.",
+        "reasoning": "The condition was inverted. Originally tokens were replenished only when time had actually advanced (elapsed > 0). Now the refill logic runs only when elapsed <= 0 \u2014 i.e., when no time has passed or the clock went backward. Concrete failure: call `_refill()` twice in a row with real time passing (e.g. elapsed = 0.5s on the first call). Since 0.5 > 0, `not elapsed > 0` is False, so the token count is never updated and `_last_refill` is never advanced \u2014 the bucket never refills under normal forward-moving time, effectively starving all future token acquisitions. Conversely, if elapsed is exactly 0 or negative (clock didn't advance or went backward), tokens are erroneously added using a zero or negative elapsed value (negative elapsed would actually subtract tokens via `elapsed * self.rate`, and zero elapsed just adds nothing but still updates `_last_refill` unnecessarily). This is the opposite of correct token-bucket refill semantics and would break normal operation entirely.</reasoning>\n</invoke>\n",
+        "cost_usd": 0.0225856,
+        "duration_ms": 6343,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 1.0,
+        "evidence": "pytest run: \"FAILED test_token_bucket.py::test_refill_over_time - assert 0 == 6\" and \"FAILED test_token_bucket.py::test_refill_caps_at_capacity - assert 8 == 10\", with \"2 failed, 9 passed in 0.04s\". Also confirmed by reading token_bucket.py:24, where the condition now reads `if not elapsed > 0:` guarding the refill body.",
+        "reasoning": "The diff inverts the refill guard from `elapsed > 0` to `not elapsed > 0` (i.e. `elapsed <= 0`). Since `_refill` is called on every `try_acquire`/`available_tokens`/`time_until_available`, and normally `elapsed` is positive (real time has passed since last refill), the bucket now only \"refills\" when no time or negative time has passed \u2014 meaning it never actually replenishes tokens under normal operation. This is directly demonstrated by the two failing tests: tokens consumed are never restored even after the clock advances by several seconds, and the cap-at-capacity test shows tokens frozen below capacity indefinitely. This isn't just an uncovered edge case \u2014 it breaks the core purpose of the module (rate limiting via token refill) for all normal forward-time usage, and the existing test suite already catches it with concrete failures.",
+        "cost_usd": 0.0497296,
+        "duration_ms": 13008,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "token_bucket",
+      "mutation_index": 13,
+      "mutation_kind": "arithmetic_operator_swap",
+      "description": "arithmetic_operator_swap:Sub->Add @ line 25",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.99,
+        "evidence": "Line: `elapsed = now + self._last_refill` (was `now - self._last_refill`). Example: if `_last_refill=1000.0` (seconds) and a call arrives 0.1s later at `now=1000.1`, correct elapsed=0.1, but buggy elapsed=1000.1+1000.0=2000.1, which times any positive rate is huge and gets clamped to `capacity` by the `min()`, instantly refilling the bucket to full on almost every `_refill()` call \u2014 the bucket never meaningfully depletes/rate-limits.",
+        "reasoning": "The refill logic requires elapsed wall/monotonic time since last refill, computed as now - last_refill. The diff changes this to now + last_refill, which sums two absolute timestamps instead of differencing them. Since both now and _last_refill are typically large positive values from a monotonic or epoch clock, elapsed becomes a huge positive number (roughly 2x the current time) rather than the small true elapsed interval. This causes _tokens to be replenished to capacity (via the min()) on essentially every call, regardless of how little real time has passed, completely defeating the rate limiting purpose of the token bucket. It also breaks the invariant that elapsed should be ~0 for back-to-back calls.",
+        "cost_usd": 0.025643600000000003,
+        "duration_ms": 9838,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 0.97,
+        "evidence": "Manual trace with capacity=10, rate=2, FakeClock starting at 0: (1) try_acquire(10) at t=0 drains tokens to 0, elapsed=0 so _last_refill stays 0. (2) advance to t=1, available_tokens(): elapsed = now + last_refill = 1+0 = 1 (matches correct 1-0=1), tokens = min(10, 0+1*2) = 2, _last_refill becomes 1. (3) advance to t=2, available_tokens(): buggy elapsed = now + last_refill = 2+1 = 3, but correct elapsed should be 2-1=1. Buggy tokens = min(10, 2+3*2) = 8, whereas correct tokens = min(10, 2+1*2) = 4. The existing test suite (python3 -m pytest -q test_token_bucket.py) reports \"11 passed in 0.03s\" but every test only exercises a single nonzero-time refill starting from _last_refill=0, where now+0 and now-0 are identical, so none of them reach the divergent case demonstrated above.",
+        "reasoning": "The diff replaces elapsed = now - self._last_refill with now + self._last_refill. Addition and subtraction only coincide when self._last_refill is 0, which is true only for the first refill transition in every existing test (FakeClock starts at 0 and _last_refill is initialized to that same value). Once _last_refill becomes nonzero (i.e., after a second refill-triggering call), the formula sums two clock readings instead of differencing them, producing an elapsed time that is far larger than the true elapsed time and grows more incorrect with each subsequent call. This causes the bucket to refill much faster than configured, breaking the rate-limiting guarantee in any realistic multi-call usage pattern, even though the current test suite passes because it never exercises more than one nonzero-time refill.",
+        "cost_usd": 0.1458826,
+        "duration_ms": 53938,
+        "num_turns": 8,
+        "error": null
+      },
+      "baseline_correct": false,
+      "agent_correct": false
+    },
+    {
+      "module": "token_bucket",
+      "mutation_index": 14,
+      "mutation_kind": "comparison_operator_swap",
+      "description": "comparison_operator_swap:Gt->GtE @ line 26",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "no_bug",
+        "confidence": 0.85,
+        "evidence": "`if elapsed >= 0: self._tokens = min(self.capacity, self._tokens + elapsed * self.rate); self._last_refill = now` \u2014 the only newly-included case vs. the old `> 0` guard is `elapsed == 0`. In that case `elapsed * self.rate == 0`, so `self._tokens + 0 == self._tokens`, and since `_tokens` is always already `<= capacity` (every prior refill clamps it with `min`), `min(self.capacity, self._tokens)` evaluates to `self._tokens` unchanged. `self._last_refill = now` also sets it to the same value it already held (since `elapsed == now - self._last_refill == 0`). Negative `elapsed` (clock moving backward) is excluded by both `> 0` and `>= 0`, so that path is unchanged too.",
+        "reasoning": "The diff only changes behavior for the exact-zero-elapsed case, and in that case the added code path is a no-op: it recomputes the same token count and reassigns the same timestamp. There's no state mutation that differs from doing nothing. Negative-elapsed handling (the more interesting edge case for clock skew) is identical before and after. So this is a harmless/cosmetic change, not a behavioral bug, assuming `_tokens` invariant `<= capacity` holds as implied by the shown code (every refill path clamps via `min`).</reasoning>\n",
+        "cost_usd": 0.0311526,
+        "duration_ms": 15829,
+        "error": null
+      },
+      "agent": {
+        "verdict": "no_bug",
+        "confidence": 0.93,
+        "evidence": "pytest output: \"...........                                                              [100%]\\n11 passed in 0.03s\". Manual trace: with elapsed==0, min(self.capacity, self._tokens + elapsed*self.rate) == min(self.capacity, self._tokens) == self._tokens (since the invariant self._tokens <= self.capacity always holds), and now == self._last_refill + 0, so both assignments in the newly-entered branch are no-ops.",
+        "reasoning": "Changing `elapsed > 0` to `elapsed >= 0` only newly executes the refill body when elapsed == 0 (two _refill() calls with no time elapsed, e.g. FakeClock not advanced, or two calls in the same tick). At elapsed==0, tokens+elapsed*rate == tokens, and since _tokens never exceeds capacity by class invariant, the min() clamp changes nothing; _last_refill is reassigned to the same value it already had. The elapsed<0 case (clock moving backwards) is still excluded by >=0, so that protection is unchanged. No test exercises the elapsed==0 case directly, but the no-op nature holds for all capacity/rate/tokens values, not just the tested ones, so the change is behaviorally inert rather than merely untested.",
+        "cost_usd": 0.09816079999999999,
+        "duration_ms": 33222,
+        "num_turns": 7,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    },
+    {
+      "module": "token_bucket",
+      "mutation_index": 21,
+      "mutation_kind": "comparison_operator_swap",
+      "description": "comparison_operator_swap:LtE->Lt @ line 47",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "bug",
+        "confidence": 0.9,
+        "evidence": "Changed `if deficit <= 0:` to `if deficit < 0:`. With `deficit = cost - self._tokens`, when `cost == self._tokens` exactly (deficit == 0, meaning the bucket has precisely enough tokens right now), the new code no longer returns `0.0` early and falls through to `if self.rate == 0: return float('inf')`.",
+        "reasoning": "Consider a bucket with rate=0 (no refill) and self._tokens == 5. Calling the method with cost=5 gives deficit=0. Under the old logic (`<= 0`), this correctly returns 0.0 immediately since the tokens are available right now. Under the new logic (`< 0`), deficit=0 fails the check, execution proceeds to `if self.rate == 0: return float('inf')`, incorrectly reporting that the tokens will never become available even though they are available at this exact moment. For rate != 0, deficit=0 still yields 0.0 via `deficit / rate`, so the bug is specifically triggered by the combination of an exact-match cost and a zero refill rate \u2014 a plausible edge case (e.g. a bucket that was pre-loaded with a fixed allotment and no ongoing refill).</reasoning>\n",
+        "cost_usd": 0.028039599999999998,
+        "duration_ms": 11631,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 0.95,
+        "evidence": "token_bucket.py:44-49 after the change:\n    deficit = cost - self._tokens\n    if deficit < 0:\n        return 0.0\n    if self.rate == 0:\n        return float('inf')\n    return deficit / self.rate\nFor TokenBucket(capacity=5, rate=0) with tokens==5, time_until_available(5) gives deficit = 5-5 = 0. Old guard `deficit <= 0` would return 0.0. New guard `deficit < 0` is false, so it falls into `if self.rate == 0: return float('inf')`, incorrectly reporting tokens will never be available even though cost <= tokens right now. `python3 -m pytest -q test_token_bucket.py` output: \"...........                                                              [100%]\\n11 passed in 0.03s\" \u2014 but no test combines rate==0 with an exact-match deficit of 0 (test_zero_rate_never_refills uses deficit=1, test_time_until_available_when_already_available uses rate=2), so this regression is uncovered by the suite.",
+        "reasoning": "The diff only changes behavior at the deficit==0 boundary (cost exactly equals available tokens). When rate != 0, deficit/rate = 0/rate = 0.0, so the change is harmless there. But when rate == 0, the new code order checks `self.rate == 0` before ever handling the deficit==0 case, causing it to return inf instead of the correct 0.0. This is a genuine behavioral regression that the existing test suite does not exercise, since none of the tests set up rate=0 together with cost exactly equal to available tokens.",
+        "cost_usd": 0.097888,
+        "duration_ms": 32997,
+        "num_turns": 6,
+        "error": null
+      },
+      "baseline_correct": false,
+      "agent_correct": false
+    },
+    {
+      "module": "signup_validator",
+      "mutation_index": 0,
+      "mutation_kind": "constant_off_by_one",
+      "description": "constant_off_by_one:plus_one @ line 11",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "no_bug",
+        "confidence": 0.85,
+        "evidence": "The only change is `USERNAME_MIN_LEN = 3` \u2192 `USERNAME_MIN_LEN = 4` on line 8. No other logic, regex, or length-check code was touched.",
+        "reasoning": "This is a straightforward constant adjustment that tightens the minimum username length from 3 to 4 characters. It will cause previously-valid 3-character usernames (e.g. 'bob', 'ann') to now be rejected by whatever length check uses USERNAME_MIN_LEN, but that's the intended effect of raising a minimum-length constant, not an unintended defect. There's no off-by-one error, no mismatch with USERNAME_MAX_LEN (4 < 20, still a valid range), and no other code path in the diff that assumes the old value of 3. Without visibility into callers that might hardcode assumptions about the old minimum (e.g. tests or downstream systems expecting 3-char usernames), this reads as a deliberate policy change rather than a behavioral bug in the diff itself.",
+        "cost_usd": 0.036921600000000006,
+        "duration_ms": 11149,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 0.98,
+        "evidence": "Running `python3 -m pytest -q test_signup_validator.py` produced:\n\"\"\"\n_____________________ test_username_min_length_boundary_ok _____________________\n\n    def test_username_min_length_boundary_ok():\n        r = validate_username(\"abc\")\n>       assert r.is_valid\nE       AssertionError: assert False\nE        +  where False = ValidationResult(errors=['username must be at least 4 characters']).is_valid\n\ntest_signup_validator.py:17: AssertionError\n=========================== short test summary info ============================\nFAILED test_signup_validator.py::test_username_min_length_boundary_ok - Asser...\n1 failed, 15 passed in 0.04s\n\"\"\"",
+        "reasoning": "The diff changes USERNAME_MIN_LEN from 3 to 4 in signup_validator.py. Reading the full module confirms this constant is used directly in validate_username's length check (`if len(username) < USERNAME_MIN_LEN`). The existing test suite already encodes 3 as the correct minimum boundary via test_username_min_length_boundary_ok, which asserts that a 3-character username (\"abc\") is valid. After the change, that test fails because a 3-char username is now rejected. This is not a case where tests simply fail to cover the changed behavior \u2014 the coverage exists and directly demonstrates a regression: the change breaks a previously-passing, explicit contract test. Hence this is a genuine behavioral bug introduced by the diff.",
+        "cost_usd": 0.07724299999999999,
+        "duration_ms": 17139,
+        "num_turns": 7,
+        "error": null
+      },
+      "baseline_correct": false,
+      "agent_correct": true
+    },
+    {
+      "module": "signup_validator",
+      "mutation_index": 1,
+      "mutation_kind": "constant_off_by_one",
+      "description": "constant_off_by_one:minus_one @ line 11",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "no_bug",
+        "confidence": 0.7,
+        "evidence": "The only change is `USERNAME_MIN_LEN = 3` -> `USERNAME_MIN_LEN = 2` (signup_validator.py). This constant is presumably used elsewhere as `len(username) >= USERNAME_MIN_LEN`, so the only behavioral effect is that a 2-character username (e.g. \"ab\") now passes validation where previously it was rejected.",
+        "reasoning": "This is a straightforward constant edit, not a logic change \u2014 no off-by-one, no sign flip, no broken comparison, and no inconsistency with surrounding code (USERNAME_MAX_LEN, PASSWORD_MIN_LEN untouched). Lowering a minimum length by one is a policy/requirements change (loosening validation), plausibly intentional. Nothing in the diff demonstrates broken logic; without evidence that 3 was a hard external requirement (docs, tests, DB constraints) enforcing a floor of 3, this reads as a deliberate relaxation rather than a bug. Confidence is moderate rather than high because a change to a validation boundary constant could still violate an implicit external contract not visible in this diff.",
+        "cost_usd": 0.040834999999999996,
+        "duration_ms": 15043,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 0.99,
+        "evidence": "Actual pytest output:\n```\nF...............                                                         [100%]\n=================================== FAILURES ===================================\n___________________________ test_username_too_short ____________________________\n\n    def test_username_too_short():\n        r = validate_username(\"ab\")\n>       assert not r.is_valid\nE       assert not True\nE        +  where True = ValidationResult(errors=[]).is_valid\n\ntest_signup_validator.py:11: AssertionError\n=========================== short test summary info ============================\nFAILED test_signup_validator.py::test_username_too_short - assert not True\n1 failed, 15 passed in 0.04s\n```\n`validate_username(\"ab\")` now returns no errors: with `USERNAME_MIN_LEN = 2`, `len(\"ab\") < 2` is False, the regex `^[A-Za-z0-9_]+$` matches \"ab\", and it doesn't start with a digit, so `is_valid` is `True` \u2014 contradicting the existing test's expectation that 2-char usernames are rejected.",
+        "reasoning": "Reading signup_validator.py in context shows validate_username only rejects usernames with len < USERNAME_MIN_LEN. Lowering USERNAME_MIN_LEN from 3 to 2 changes the minimum-length policy from \"at least 3 characters\" to \"at least 2 characters,\" which directly contradicts the pre-existing behavioral contract encoded in test_username_too_short (asserting \"ab\", a 2-char name, is invalid) and test_username_min_length_boundary_ok (asserting \"abc\", 3 chars, is the valid boundary). This isn't a case of tests simply not covering the change \u2014 the test suite explicitly covers this exact boundary and fails deterministically. The change is a real behavioral regression, not a benign or intentional-looking policy tweak (no other code, comments, or test updates accompany it to suggest the policy change was deliberate and endorsed).",
+        "cost_usd": 0.06381300000000001,
+        "duration_ms": 14322,
+        "num_turns": 5,
+        "error": null
+      },
+      "baseline_correct": false,
+      "agent_correct": true
+    },
+    {
+      "module": "signup_validator",
+      "mutation_index": 2,
+      "mutation_kind": "constant_off_by_one",
+      "description": "constant_off_by_one:plus_one @ line 12",
+      "ground_truth_verdict": "bug",
+      "ground_truth_test_outcome": "killed",
+      "baseline": {
+        "verdict": "no_bug",
+        "confidence": 0.62,
+        "evidence": "The only change is `-USERNAME_MAX_LEN = 20` / `+USERNAME_MAX_LEN = 21`. This constant is presumably used elsewhere in the file (e.g. `len(username) <= USERNAME_MAX_LEN`) to bound the username length check.",
+        "reasoning": "This is a one-line change to a bare configuration constant, not a change to any validation logic, regex, or comparison operator. The effect is that a 21-character username now passes where it previously would have been rejected \u2014 a real behavioral difference \u2014 but nothing in the diff indicates that 20 was the \"correct\" or contractually required maximum (no docstring, error message, schema comment, or test in the diff asserts 20 specifically). Widening a length limit by one character is a plausible, intentional policy tweak (e.g. relaxing a rule), and there's no off-by-one logic error here (no `<` vs `<=` mismatch, no boundary miscalculation) \u2014 the constant is simply reassigned to a new valid value and will be used consistently wherever it's referenced. Without visibility into other files that might depend on USERNAME_MAX_LEN==20 (e.g., a DB column width, a frontend character counter, or a test suite), I can't point to a concrete broken input/output pair caused by this change \u2014 only a shifted boundary that is not on its face incorrect. I'd flag it in a real review as worth confirming against spec/DB schema, but the diff alone doesn't show a defect.</reasoning>\n",
+        "cost_usd": 0.032791600000000004,
+        "duration_ms": 18924,
+        "error": null
+      },
+      "agent": {
+        "verdict": "bug",
+        "confidence": 0.98,
+        "evidence": "pytest output: \"test_username_too_long ... assert not r.is_valid\\nE       assert not True\\nE        +  where True = ValidationResult(errors=[]).is_valid\\n...\\n1 failed, 15 passed in 0.04s\". The failing test does `validate_username(\"a\" * 21)` and expects it invalid.",
+        "reasoning": "The diff changes USERNAME_MAX_LEN from 20 to 21. validate_username checks `len(username) > USERNAME_MAX_LEN`, so a 21-char username is no longer rejected (21 is not > 21). This is a deterministic off-by-one widening of the length boundary, directly caught by the existing test_username_too_long, which fails as shown in the real pytest run. It also leaves the new true boundary (21 chars) without a passing boundary test, since test_username_max_length_boundary_ok only checks 20 chars.",
+        "cost_usd": 0.076385,
+        "duration_ms": 18170,
+        "num_turns": 6,
+        "error": null
+      },
+      "baseline_correct": false,
+      "agent_correct": true
+    },
+    {
+      "module": "signup_validator",
+      "mutation_index": 24,
+      "mutation_kind": "comparison_operand_swap",
+      "description": "comparison_operand_swap:swap_operands @ line 22",
+      "ground_truth_verdict": "no_bug",
+      "ground_truth_test_outcome": "survived",
+      "baseline": {
+        "verdict": "no_bug",
+        "confidence": 0.99,
+        "evidence": "`return 0 == len(self.errors)` vs original `return len(self.errors) == 0`",
+        "reasoning": "This is a pure Yoda-condition style rewrite of an equality comparison. `==` is commutative and both operands are plain values (int literal and int), so `0 == len(self.errors)` evaluates identically to `len(self.errors) == 0` for every possible value of len(self.errors) (0, 1, 2, ...). There is no operator overloading concern since len() always returns a built-in int. No behavioral change results.",
+        "cost_usd": 0.0191346,
+        "duration_ms": 3998,
+        "error": null
+      },
+      "agent": {
+        "verdict": "no_bug",
+        "confidence": 0.99,
+        "evidence": "Diff changes `return len(self.errors) == 0` to `return 0 == len(self.errors)`. Full test run: \"................ [100%] 16 passed in 0.03s\"",
+        "reasoning": "The change reorders operands of an `==` comparison between an int literal (0) and `len(...)` (always a non-negative int). Integer equality in Python is symmetric with no side effects, overloading, or short-circuit behavior involved, so there is no input on which this could produce a different result than before. This is a pure style change (Yoda-condition style), confirmed by all 16 existing tests passing unchanged.",
+        "cost_usd": 0.0446202,
+        "duration_ms": 11216,
+        "num_turns": 4,
+        "error": null
+      },
+      "baseline_correct": true,
+      "agent_correct": true
+    }
+  ]
+}
