@@ -12,13 +12,10 @@ Recorded, narrated (Kokoro TTS, local re-synth of the original narration),
 uploaded to YouTube unlisted: https://youtu.be/UVs6c3nyBLw. Linked from
 `README.md`.
 
-## 2. Submit the HackerEarth form
+## 2. Submit the HackerEarth form — done
 
-- Repo link: `https://github.com/dozken/micro1` (default branch `main` has everything).
-- Video URL: https://youtu.be/UVs6c3nyBLw
-- The write-up fields can be filled from `README.md` — the sections map 1:1
-  to the judging rubric (problem & user value, agent solution & engineering,
-  measured improvement, reproducibility, hot take).
+Submitted and published: repo link, video URL, and write-up (mapped from
+`README.md`'s sections to the judging rubric) all in.
 
 ## 3. Make the repo accessible to judges — worth 15 points — done
 
